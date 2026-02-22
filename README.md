@@ -65,14 +65,48 @@ All nodes in this library produce a String output that can typically be passed i
 
 Please note, since ComfyUI is inherently stateless, some nodes might have a slightly unexpected behavior:
 
-- The Combinatorial Prompt generation iterates through all possible values in a cycle. For example, A `{red|green|blue}` ball will generate the following sequence:
+- The **Combinatorial** mode iterates through all possible values in a cycle. For example, `{red|green|blue} ball` will generate:
   - A red ball
   - A green ball
   - A blue ball
   - A red ball
   - ...
 
+- The **Shuffle** mode iterates through all values in a seeded-random order, then repeats that same order. For example, `{red|green|blue} ball` with a given seed might generate:
+  - A green ball
+  - A blue ball
+  - A red ball
+  - A green ball  *(same order repeats)*
+  - ...
+
 - The I'm Feeling Lucky, Magic Prompt, and Jinja2 nodes have an optional auto refresh parameter. If set to `True`, a new prompt is generated for every iteration. However, if set to `False`, a prompt will be downloaded once and used for subsequent generations.
+
+## Shuffle Mode
+
+Shuffle mode (`sampling_mode = shuffle`) provides a middle ground between `random` and `combinatorial`:
+
+- Every value in a wildcard file or variant list is visited exactly once before any value repeats.
+- The visiting order is a random permutation determined by the **seed** — the same seed always produces the same order.
+- Once all values have been used, the same permuted order repeats from the beginning.
+- Wildcard files reloaded from disk (due to on-disk changes) will start a fresh shuffle.
+
+### Inline syntax: `{&opt1|opt2|opt3}`
+
+You can select shuffle behaviour for a specific variant list regardless of the global `sampling_mode` by using the `&` prefix:
+
+```
+a photo of a {&red|green|blue} ball
+```
+
+This shuffles only that variant; the rest of the prompt uses whatever the global mode is.
+
+| Prefix | Mode |
+|--------|------|
+| *(none)* | global default |
+| `~` | random |
+| `@` | cyclical |
+| `&` | shuffle |
+| `!` | combinatorial |
 
 ## Roadmap
 
@@ -93,15 +127,16 @@ This should be a more or less comprehensive list of changes I made:
   * [Disabled sorting of wildcards](https://github.com/adieyal/comfyui-dynamicprompts/commit/dce7210b36b610858b1f38511354b54d5080ba4d)
   * [Made changes to allow a single node to switch between C and R modes](https://github.com/adieyal/comfyui-dynamicprompts/commit/455c851f3762f285e7985b04ef2b79d695b1df96), meaning the two modes:
     * `random` - Generate a single random prompt based on wildcards in the prompt text (default)
-    * `combinational` - Generate all possible prompts based on wildcards in the prompt text (see [sd-dynamic-prompts readme](https://github.com/adieyal/sd-dynamic-prompts?tab=readme-ov-file#combinatorial-generation))
-      * *Note: Be aware that if a lot of wildcards and/or large wildcard-sets are used, the number of possible prompts can grow exponentially and interrupt is usually not possible at this point. Even though only a single prompt is returned at a time (but more invocation + seed), all possible combinations are (most likely) prepared in memory ahead of time.*
+    * `combinatorial` - Generate all possible prompts based on wildcards in the prompt text (see [sd-dynamic-prompts readme](https://github.com/adieyal/sd-dynamic-prompts?tab=readme-ov-file#combinatorial-generation))
+      * *Note: Be aware that if a lot of wildcards and/or large wildcard-sets are used, the number of possible prompts can grow exponentially and interrupt is usually not possible at this point. Even though only a single prompt is returned at a time (but more invocations + seed), all possible combinations are (most likely) prepared in memory ahead of time.*
+    * `shuffle` - Iterates through all wildcard/variant values in a seeded-random shuffled order, then repeats the same order cyclically (see [Shuffle mode](#shuffle-mode) below)
 * Added new `DPRandomGeneratorAdvanced` node
   * Renamed `mode` input (see feature above) to `sampling_mode` for clarification and distinction
   * Added new `refresh_mode` input with two options:
     * `always` - Always trigger/re-evaluate the node by resetting the `IS_CHANGED` state (original behavior)
-      * This must be enabled in case `combinational` mode is used to generate all possible prompts using the same seed
+      * This must be enabled in case `combinatorial` mode is used to generate all possible prompts using the same seed
     * `on_value_change` - Only trigger/re-evaluate the node when any input value (text, seed, etc.) has changes (new default behavior)
-      * This is likely the preferred behavior for most use-cases, including `combinational` mode in case the same prompt should be reproduced multiple times
+      * This is likely the preferred behavior for most use-cases, including `combinatorial` mode in case the same prompt should be reproduced multiple times
   * Added new `console_output` input with two options:
     * `off` - Do not print the generated prompt to the console (new default behavior)
       * I often times modify the prompts afterwards and use nodes to display the final prompt and save it in the metadata
