@@ -21,8 +21,31 @@ from dynamicprompts.sampling_result import SamplingResult
 from dynamicprompts.types import ResultGen, to_result_gen
 from dynamicprompts.utils import next_sampler_next_value
 from dynamicprompts.wildcards import WildcardManager
+from dynamicprompts.wildcards.values import WildcardValues
 
 logger = logging.getLogger(__name__)
+
+
+class FilteringWildcardManager(WildcardManager):
+    """WildcardManager that supports ?filter syntax for substring search.
+
+    __numbers?five__ -> loads all values from 'numbers', returns only those
+    containing 'five' (case-insensitive substring match).
+    """
+
+    def get_values(self, wildcard: str) -> WildcardValues:
+        if "?" in wildcard:
+            name, filter_term = wildcard.split("?", 1)
+            values = super().get_values(name)
+            if not filter_term:
+                return values
+            filtered = tuple(
+                item
+                for item, sv in zip(values.items, values.string_values)
+                if filter_term.lower() in sv.lower()
+            )
+            return WildcardValues(items=filtered)
+        return super().get_values(wildcard)
 
 
 def _split_by_pipe_at_depth0(content: str) -> list[str]:
@@ -212,7 +235,7 @@ class DPAbstractSamplerNodeAdvanced(ABC):
         """
         wildcards_folder = self._find_wildcards_folder()
         print(f"Loading wildcard manager from {wildcards_folder}")
-        self._wildcard_manager = WildcardManager(path=wildcards_folder)
+        self._wildcard_manager = FilteringWildcardManager(path=wildcards_folder)
         self._wildcard_manager._sort_wildcards = False
         self._wildcard_manager.clear_cache()
         self._current_prompt = None

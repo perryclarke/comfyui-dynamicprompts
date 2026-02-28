@@ -108,6 +108,45 @@ This shuffles only that variant; the rest of the prompt uses whatever the global
 | `&` | shuffle |
 | `!` | combinatorial |
 
+## Wildcard Search/Filter Syntax
+
+You can filter wildcard values by substring using `?` inside the wildcard reference:
+
+```
+__wildcard_name?filter__
+```
+
+This loads all values from the wildcard file, then returns only those containing the filter term (case-insensitive substring match). The filtered results are sampled according to the current mode (random, combinatorial, shuffle).
+
+### Examples
+
+Given a wildcard file `numbers.txt` with entries like "one", "two", ..., "fifty-five", "five hundred":
+
+| Syntax | Result |
+|--------|--------|
+| `__numbers?five__` | Only values containing "five" (e.g. "five", "fifty-five", "five hundred") |
+| `__numbers?__` | All values (empty filter) |
+| `__numbers__` | All values (no filter) |
+
+### Works with sampler prefixes
+
+The filter syntax combines naturally with inline sampler prefixes:
+
+| Syntax | Behavior |
+|--------|----------|
+| `__~numbers?five__` | Filtered values, sampled randomly |
+| `__@numbers?five__` | Filtered values, cycled in order |
+| `__&numbers?five__` | Filtered values, shuffled then cycled |
+| `__!numbers?five__` | Filtered values, combinatorial |
+
+### Variant-wrapped wildcards
+
+You can also use the filter inside variant syntax:
+
+```
+a photo of {__colors?dark__} sky
+```
+
 ## Roadmap
 
 1. This is a quick and dirty release with some known limitations such as non-configurable random seeds, inability to select the MagicPrompt model, and absence of several other configuration features.
