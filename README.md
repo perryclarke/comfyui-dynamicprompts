@@ -110,13 +110,13 @@ This shuffles only that variant; the rest of the prompt uses whatever the global
 
 ## Wildcard Search/Filter Syntax
 
-You can filter wildcard values by substring using `?` inside the wildcard reference:
+You can filter wildcard values using `?` inside the wildcard reference. The filter supports plain substrings, comma-separated OR terms, and Python regex patterns (all case-insensitive):
 
 ```
 __wildcard_name?filter__
 ```
 
-This loads all values from the wildcard file, then returns only those containing the filter term (case-insensitive substring match). The filtered results are sampled according to the current mode (random, combinatorial, shuffle).
+The filtered results are sampled according to the current mode (random, combinatorial, shuffle).
 
 ### Examples
 
@@ -125,8 +125,13 @@ Given a wildcard file `numbers.txt` with entries like "one", "two", ..., "fifty-
 | Syntax | Result |
 |--------|--------|
 | `__numbers?five__` | Only values containing "five" (e.g. "five", "fifty-five", "five hundred") |
+| `__numbers?two,seven__` | Values containing "two" or "seven" |
+| `__numbers?^five__` | Values starting with "five" |
+| `__numbers?.*teen__` | Values ending with "teen" |
 | `__numbers?__` | All values (empty filter) |
 | `__numbers__` | All values (no filter) |
+
+Commas in the filter act as OR separators. Each comma-separated term can itself be a regex pattern.
 
 ### Works with sampler prefixes
 

@@ -4,6 +4,7 @@ import dataclasses
 import logging
 import os
 import random as random_module
+import re
 from abc import ABC, abstractproperty
 from collections.abc import Iterable
 from hashlib import sha256
@@ -27,11 +28,31 @@ logger = logging.getLogger(__name__)
 
 
 class FilteringWildcardManager(WildcardManager):
-    """WildcardManager that supports ?filter syntax for substring search.
+    """WildcardManager that supports ?filter syntax for regex search.
 
-    __numbers?five__ -> loads all values from 'numbers', returns only those
-    containing 'five' (case-insensitive substring match).
+    __numbers?five__        -> values matching regex 'five' (plain substring)
+    __numbers?two,seven__   -> values containing 'two' or 'seven'
+    __numbers?^five__       -> values starting with 'five'
+    __numbers?.*teen__      -> values ending with 'teen'
+
+    Commas in the filter are converted to regex alternation (|) so they
+    work as OR.  This avoids parser issues with () and | characters that
+    have special meaning in the dynamic prompts grammar.
+
+    Filters are case-insensitive.
     """
+
+    @staticmethod
+    def _build_filter_pattern(filter_term: str) -> re.Pattern:
+        """Build a regex from the filter term, treating commas as OR."""
+        parts = filter_term.split(",")
+        if len(parts) > 1:
+            # Join with regex alternation; each part is used as-is (may
+            # itself contain regex syntax like ^ or .*).
+            regex = "|".join(f"(?:{p})" for p in parts)
+        else:
+            regex = filter_term
+        return re.compile(regex, re.IGNORECASE)
 
     def get_values(self, wildcard: str) -> WildcardValues:
         if "?" in wildcard:
@@ -39,10 +60,11 @@ class FilteringWildcardManager(WildcardManager):
             values = super().get_values(name)
             if not filter_term:
                 return values
+            pattern = self._build_filter_pattern(filter_term)
             filtered = tuple(
                 item
                 for item, sv in zip(values.items, values.string_values)
-                if filter_term.lower() in sv.lower()
+                if pattern.search(sv)
             )
             return WildcardValues(items=filtered)
         return super().get_values(wildcard)
