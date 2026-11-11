@@ -165,6 +165,11 @@ The prompt box is shown as a list:
 
 Dynamic prompt syntax and wildcards work inside each prompt as usual.
 
+**After each run** (next to **+ New prompt**) controls what happens once a run is queued:
+
+- `stay on this prompt` (default): the open prompt stays open.
+- `go to next prompt`: the run uses the open prompt, then the next non-empty prompt is opened, wrapping around at the end. Queueing several runs at once (batch count) steps through the list, one prompt per run. Nothing advances while the node is muted or bypassed.
+
 The prompts are stored with the workflow (in the node's `dp_prompts` property), so saving the workflow saves the whole set. The open prompt is also written to the node's normal `text` input, so the backend, the API format and older copies of this extension see a single prompt as before. Workflows saved before this feature open with their existing prompt as the only entry.
 
 This is a browser extension (`web/prompt_list.js`); it needs ComfyUI to be restarted once after installing so the extension is loaded.

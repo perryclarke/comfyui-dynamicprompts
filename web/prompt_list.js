@@ -29,7 +29,17 @@ const STYLE = `
 .dp-plist-add { flex:none; align-self:flex-start; cursor:pointer; border-radius:4px; padding:2px 10px;
   background: var(--comfy-input-bg, #222); color: inherit; border:1px solid var(--border-color, #444); }
 .dp-plist-add:hover { filter: brightness(1.2); }
+.dp-plist-bar { flex:none; display:flex; align-items:center; gap:8px; }
+.dp-plist-mode { margin-left:auto; display:flex; align-items:center; gap:4px; opacity:.85; }
+.dp-plist-mode select { background: var(--comfy-input-bg, #222); color: inherit;
+  border:1px solid var(--border-color, #444); border-radius:4px; font-size:12px; padding:1px 2px; }
 `;
+
+// What happens after a run is queued.
+const MODES = [
+    ["fixed", "stay on this prompt"],
+    ["cycle", "go to next prompt"],
+];
 
 function injectStyle() {
     if (document.getElementById("dp-plist-style")) return;
@@ -60,7 +70,23 @@ function setupPromptList(node) {
     addBtn.className = "dp-plist-add";
     addBtn.textContent = "+ New prompt";
     addBtn.title = "Add a new prompt";
-    container.append(rows, addBtn);
+
+    const modeWrap = document.createElement("label");
+    modeWrap.className = "dp-plist-mode";
+    modeWrap.title = "Queueing a run uses the open prompt. 'go to next prompt' then opens the next non-empty prompt, wrapping at the end, so queueing several runs steps through the list.";
+    const modeSelect = document.createElement("select");
+    for (const [value, label] of MODES) {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = label;
+        modeSelect.appendChild(o);
+    }
+    modeWrap.append("After each run:", modeSelect);
+
+    const bar = document.createElement("div");
+    bar.className = "dp-plist-bar";
+    bar.append(addBtn, modeWrap);
+    container.append(rows, bar);
 
     // Keep wheel scrolling inside the list/textarea instead of zooming the canvas.
     container.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
@@ -74,6 +100,7 @@ function setupPromptList(node) {
                 node.properties[PROP] = d;
             }
             d.active = Math.min(Math.max(0, d.active | 0), d.prompts.length - 1);
+            if (!MODES.some(([v]) => v === d.mode)) d.mode = "fixed";
             return d;
         },
     };
@@ -108,6 +135,29 @@ function setupPromptList(node) {
         markChanged();
     }
 
+    modeSelect.addEventListener("change", () => {
+        state.data.mode = modeSelect.value;
+        markChanged();
+    });
+    // Keep canvas shortcuts and dragging from grabbing the select.
+    modeSelect.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+    // Next non-empty prompt after the open one, wrapping; stays put if there is none.
+    function advance() {
+        const d = state.data;
+        const n = d.prompts.length;
+        for (let step = 1; step < n; step++) {
+            const i = (d.active + step) % n;
+            if (d.prompts[i].trim() !== "") {
+                d.active = i;
+                setText(d.prompts[i]);
+                render(false);
+                markChanged();
+                return;
+            }
+        }
+    }
+
     addBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const d = state.data;
@@ -127,6 +177,7 @@ function setupPromptList(node) {
 
     function render(focus) {
         const d = state.data;
+        modeSelect.value = d.mode;
         rows.replaceChildren();
         d.prompts.forEach((p, i) => {
             const row = document.createElement("div");
@@ -172,6 +223,11 @@ function setupPromptList(node) {
         getMinHeight: () => 220,
     });
     widget.serialize = false;
+    // Called by the frontend once per queued run, after the prompt has been sent.
+    widget.afterQueued = () => {
+        if (node.mode !== 0) return; // muted or bypassed
+        if (state.data.mode === "cycle") advance();
+    };
 
     node._dpPromptList = {
         // Called after a workflow is loaded: adopt saved list, or migrate the old single text.
