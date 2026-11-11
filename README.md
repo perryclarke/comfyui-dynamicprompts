@@ -152,6 +152,23 @@ You can also use the filter inside variant syntax:
 a photo of {__colors?dark__} sky
 ```
 
+## Saved Prompts (Random Prompts Advanced)
+
+The `Random Prompts Advanced` node can hold several prompts and lets you choose which one to use, so one workflow can carry a set of prompts instead of being saved under a new name for each.
+
+The prompt box is shown as a list:
+
+- The open prompt is shown in full in an editable, scrolling text box. The others show their first line.
+- Click a closed row to open it. The open prompt is the one used when you queue a run.
+- **+ New prompt** adds an empty prompt and opens it.
+- 🗑 deletes a prompt (with a confirmation unless it is empty). The last prompt can't be deleted.
+
+Dynamic prompt syntax and wildcards work inside each prompt as usual.
+
+The prompts are stored with the workflow (in the node's `dp_prompts` property), so saving the workflow saves the whole set. The open prompt is also written to the node's normal `text` input, so the backend, the API format and older copies of this extension see a single prompt as before. Workflows saved before this feature open with their existing prompt as the only entry.
+
+This is a browser extension (`web/prompt_list.js`); it needs ComfyUI to be restarted once after installing so the extension is loaded.
+
 ## Roadmap
 
 1. This is a quick and dirty release with some known limitations such as non-configurable random seeds, inability to select the MagicPrompt model, and absence of several other configuration features.
