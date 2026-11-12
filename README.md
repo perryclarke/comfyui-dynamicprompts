@@ -1,4 +1,7 @@
-# ComfyUI-DynamicPrompts Custom Nodes *- modified by cbaoth*
+# ComfyUI-DynamicPrompts Custom Nodes *- modified by cbaoth and perryclarke*
+
+> **This is a fork of [cbaoth/comfyui-dynamicprompts](https://github.com/cbaoth/comfyui-dynamicprompts), which is itself a fork of [adieyal/comfyui-dynamicprompts](https://github.com/adieyal/comfyui-dynamicprompts).**
+> For what this fork adds (shuffle sampling, wildcard filters, saved prompt lists, wildcard auto-reload), see **[Changes in this fork](#changes-in-this-fork-perryclarke)**. For cbaoth's changes, see [Updates by cbaoth](#updates-by-cbaoth-2024-11-13).
 
 <img src="images/example.png"/>
 
@@ -19,7 +22,7 @@ Nodes can be found in the Dynamic Prompts menu:
 * [Dynamic Prompts Extension for Auto1111](https://github.com/adieyal/sd-dynamic-prompts)
 * [Tutorial](https://github.com/adieyal/sd-dynamic-prompts/blob/main/docs/tutorial.md)
 * [Online Resources](https://github.com/adieyal/sd-dynamic-prompts/blob/main/docs/resources.md)
-* [CHANGELOG](./CHANGELOG.md)
+* [CHANGELOG](./docs/CHANGELOG.md)
 * [Stable Diffusion SDXL Wildcards and ComfyUI](https://ericri.medium.com/stable-diffusion-sdxl-wildcards-and-comfyui-e8483e00e1c)
 
 ## Installation
@@ -81,16 +84,31 @@ Please note, since ComfyUI is inherently stateless, some nodes might have a slig
 
 - The I'm Feeling Lucky, Magic Prompt, and Jinja2 nodes have an optional auto refresh parameter. If set to `True`, a new prompt is generated for every iteration. However, if set to `False`, a prompt will be downloaded once and used for subsequent generations.
 
-## Shuffle Mode
+## Changes in this fork (perryclarke)
+
+These changes are on top of [cbaoth's version](#updates-by-cbaoth-2024-11-13). They are also listed by date in the [CHANGELOG](./docs/CHANGELOG.md).
+
+* [Shuffle sampling mode](#shuffle-mode): a third `sampling_mode` on `Random Prompts Advanced` that visits every value once in a seeded-random order before repeating, plus the inline `{&a|b|c}` syntax to shuffle a single variant list in any mode or node.
+* [Wildcard search/filter syntax](#wildcard-searchfilter-syntax): `__name?filter__` keeps only the wildcard values matching a case-insensitive regex, with commas as OR.
+* [Saved prompts](#saved-prompts-random-prompts-advanced): `Random Prompts Advanced` can hold a list of prompts in one workflow, with an option to step to the next prompt after each run.
+* [Wildcard auto-reload](#wildcard-auto-reload): edits to wildcard files on disk are picked up on the next run without restarting ComfyUI.
+
+To install this fork instead of the original, clone it in place of the upstream repository in the [manual installation](#manual-installation) steps:
+
+```
+git clone https://github.com/perryclarke/comfyui-dynamicprompts custom_nodes/comfyui-dynamicprompts
+```
+
+### Shuffle Mode
 
 Shuffle mode (`sampling_mode = shuffle`) provides a middle ground between `random` and `combinatorial`:
 
 - Every value in a wildcard file or variant list is visited exactly once before any value repeats.
-- The visiting order is a random permutation determined by the **seed** — the same seed always produces the same order.
+- The visiting order is a random permutation determined by the **seed**: the same seed always produces the same order. A seed of `0` does not reseed the random generator, so the order is not reproducible with seed `0`.
 - Once all values have been used, the same permuted order repeats from the beginning.
 - Wildcard files reloaded from disk (due to on-disk changes) will start a fresh shuffle.
 
-### Inline syntax: `{&opt1|opt2|opt3}`
+#### Inline syntax: `{&opt1|opt2|opt3}`
 
 You can select shuffle behaviour for a specific variant list regardless of the global `sampling_mode` by using the `&` prefix:
 
@@ -98,7 +116,9 @@ You can select shuffle behaviour for a specific variant list regardless of the g
 a photo of a {&red|green|blue} ball
 ```
 
-This shuffles only that variant; the rest of the prompt uses whatever the global mode is.
+This shuffles only that variant; the rest of the prompt uses whatever the global mode is. The inline syntax works in every sampler node, including `Random Prompts` and `Combinatorial Prompts`, which have no `sampling_mode` input.
+
+`&` is new in this fork; the other prefixes are standard Dynamic Prompts syntax.
 
 | Prefix | Mode |
 |--------|------|
@@ -108,7 +128,7 @@ This shuffles only that variant; the rest of the prompt uses whatever the global
 | `&` | shuffle |
 | `!` | combinatorial |
 
-## Wildcard Search/Filter Syntax
+### Wildcard Search/Filter Syntax
 
 You can filter wildcard values using `?` inside the wildcard reference. The filter supports plain substrings, comma-separated OR terms, and Python regex patterns (all case-insensitive):
 
@@ -118,7 +138,7 @@ __wildcard_name?filter__
 
 The filtered results are sampled according to the current mode (random, combinatorial, shuffle).
 
-### Examples
+#### Examples
 
 Given a wildcard file `numbers.txt` with entries like "one", "two", ..., "fifty-five", "five hundred":
 
@@ -133,7 +153,7 @@ Given a wildcard file `numbers.txt` with entries like "one", "two", ..., "fifty-
 
 Commas in the filter act as OR separators. Each comma-separated term can itself be a regex pattern.
 
-### Works with sampler prefixes
+#### Works with sampler prefixes
 
 The filter syntax combines naturally with inline sampler prefixes:
 
@@ -144,7 +164,7 @@ The filter syntax combines naturally with inline sampler prefixes:
 | `__&numbers?five__` | Filtered values, shuffled then cycled |
 | `__!numbers?five__` | Filtered values, combinatorial |
 
-### Variant-wrapped wildcards
+#### Variant-wrapped wildcards
 
 You can also use the filter inside variant syntax:
 
@@ -152,7 +172,7 @@ You can also use the filter inside variant syntax:
 a photo of {__colors?dark__} sky
 ```
 
-## Saved Prompts (Random Prompts Advanced)
+### Saved Prompts (Random Prompts Advanced)
 
 The `Random Prompts Advanced` node can hold several prompts and lets you choose which one to use, so one workflow can carry a set of prompts instead of being saved under a new name for each.
 
@@ -173,6 +193,18 @@ Dynamic prompt syntax and wildcards work inside each prompt as usual.
 The prompts are stored with the workflow (in the node's `dp_prompts` property), so saving the workflow saves the whole set. The open prompt is also written to the node's normal `text` input, so the backend, the API format and older copies of this extension see a single prompt as before. Workflows saved before this feature open with their existing prompt as the only entry.
 
 This is a browser extension (`web/prompt_list.js`); it needs ComfyUI to be restarted once after installing so the extension is loaded.
+
+### Wildcard Auto-Reload
+
+Upstream loads wildcard files once, so edits to a wildcard file only took effect after restarting ComfyUI. This fork checks the wildcards folder on every run:
+
+- If any file under the wildcards folder has a newer modification time than when the wildcards were last loaded, the wildcards are reloaded and the console shows which file changed.
+- The newest modification time is part of the node's change hash, so with `refresh_mode = on_value_change` editing a wildcard file is enough to make the node run again, even if the prompt and seed are unchanged.
+- A reload restarts any cycle in progress: `combinatorial` and `shuffle` sequences, and `@`/`&` variants, begin again from the start.
+
+Each time the wildcards are (re)loaded, the console shows `Loading wildcard manager from <folder>`.
+
+The check walks the whole wildcards folder, so a very large folder adds a little time to each run.
 
 ## Roadmap
 
@@ -195,7 +227,7 @@ This should be a more or less comprehensive list of changes I made:
     * `random` - Generate a single random prompt based on wildcards in the prompt text (default)
     * `combinatorial` - Generate all possible prompts based on wildcards in the prompt text (see [sd-dynamic-prompts readme](https://github.com/adieyal/sd-dynamic-prompts?tab=readme-ov-file#combinatorial-generation))
       * *Note: Be aware that if a lot of wildcards and/or large wildcard-sets are used, the number of possible prompts can grow exponentially and interrupt is usually not possible at this point. Even though only a single prompt is returned at a time (but more invocations + seed), all possible combinations are (most likely) prepared in memory ahead of time.*
-    * `shuffle` - Iterates through all wildcard/variant values in a seeded-random shuffled order, then repeats the same order cyclically (see [Shuffle mode](#shuffle-mode) below)
+    * (A third mode, `shuffle`, was added later in the perryclarke fork; see [Shuffle Mode](#shuffle-mode).)
 * Added new `DPRandomGeneratorAdvanced` node
   * Renamed `mode` input (see feature above) to `sampling_mode` for clarification and distinction
   * Added new `refresh_mode` input with two options:
