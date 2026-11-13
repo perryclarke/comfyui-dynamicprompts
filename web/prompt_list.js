@@ -23,6 +23,11 @@ const STYLE = `
 .dp-plist-del { flex:none; border:none; background:none; color:inherit; cursor:pointer; opacity:.6; padding:0 2px; font-size:13px; }
 .dp-plist-del:hover { opacity:1; }
 .dp-plist-del:disabled { opacity:.2; cursor:default; }
+.dp-plist-grip { flex:none; cursor:grab; opacity:.5; padding:0 2px; font-size:13px; user-select:none; touch-action:none; }
+.dp-plist-grip:hover { opacity:1; }
+.dp-plist-row.dragging { opacity:.5; }
+.dp-plist.dragging, .dp-plist.dragging * { cursor:grabbing !important; user-select:none; }
+.dp-plist-drop { flex:none; height:2px; margin:-2px 0; border-radius:1px; background: var(--p-primary-color, #4a8fdc); }
 .dp-plist-text { flex:1 1 auto; min-height:80px; width:100%; box-sizing:border-box; resize:none;
   background: var(--comfy-input-bg, #222); color: var(--input-text, #ddd);
   border:1px solid var(--border-color, #444); border-radius:4px; padding:4px; font: 12px monospace; overflow-y:auto; }
@@ -175,6 +180,73 @@ function setupPromptList(node) {
         return del;
     }
 
+    // Move prompt `from` so it ends up before the prompt currently at `to` (0..n).
+    // The open prompt stays open, wherever it ends up.
+    function move(from, to) {
+        const d = state.data;
+        const order = d.prompts.map((_, k) => k);
+        const [item] = order.splice(from, 1);
+        order.splice(to > from ? to - 1 : to, 0, item);
+        d.prompts = order.map((k) => d.prompts[k]);
+        d.active = order.indexOf(d.active);
+        render(false);
+        markChanged();
+    }
+
+    function startDrag(e, from, row) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const grip = e.currentTarget;
+        grip.setPointerCapture(e.pointerId);
+        row.classList.add("dragging");
+        container.classList.add("dragging");
+        const indicator = document.createElement("div");
+        indicator.className = "dp-plist-drop";
+        let target = null;
+
+        const onMove = (ev) => {
+            // Scroll the list when dragging near its top or bottom edge.
+            const box = rows.getBoundingClientRect();
+            if (ev.clientY < box.top + 16) rows.scrollTop -= 8;
+            else if (ev.clientY > box.bottom - 16) rows.scrollTop += 8;
+
+            const els = [...rows.querySelectorAll(".dp-plist-row")];
+            let t = els.length;
+            for (let k = 0; k < els.length; k++) {
+                const b = els[k].getBoundingClientRect();
+                if (ev.clientY < b.top + b.height / 2) { t = k; break; }
+            }
+            target = t === from || t === from + 1 ? null : t;
+            if (target === null) indicator.remove();
+            else if (target < els.length) rows.insertBefore(indicator, els[target]);
+            else rows.appendChild(indicator);
+        };
+        const onEnd = (ev) => {
+            grip.removeEventListener("pointermove", onMove);
+            grip.removeEventListener("pointerup", onEnd);
+            grip.removeEventListener("pointercancel", onEnd);
+            if (grip.hasPointerCapture(e.pointerId)) grip.releasePointerCapture(e.pointerId);
+            indicator.remove();
+            row.classList.remove("dragging");
+            container.classList.remove("dragging");
+            if (ev.type === "pointerup" && target !== null) move(from, target);
+        };
+        grip.addEventListener("pointermove", onMove);
+        grip.addEventListener("pointerup", onEnd);
+        grip.addEventListener("pointercancel", onEnd);
+    }
+
+    function makeGrip(i, row) {
+        const grip = document.createElement("span");
+        grip.className = "dp-plist-grip";
+        grip.textContent = "⠿";
+        grip.title = "Drag to reorder. 'go to next prompt' runs the prompts in list order.";
+        grip.addEventListener("pointerdown", (e) => startDrag(e, i, row));
+        grip.addEventListener("click", (e) => e.stopPropagation());
+        return grip;
+    }
+
     function render(focus) {
         const d = state.data;
         modeSelect.value = d.mode;
@@ -190,7 +262,9 @@ function setupPromptList(node) {
             title.className = "dp-plist-title" + (fl ? "" : " empty");
             title.textContent = fl || "(empty prompt)";
             title.title = fl;
-            row.append(chev, title, makeDelete(i, d.prompts.length));
+            row.append(chev, title);
+            if (d.prompts.length > 1) row.append(makeGrip(i, row));
+            row.append(makeDelete(i, d.prompts.length));
             rows.appendChild(row);
 
             if (i === d.active) {

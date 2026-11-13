@@ -90,7 +90,7 @@ These changes are on top of [cbaoth's version](#updates-by-cbaoth-2024-11-13). T
 
 * [Shuffle sampling mode](#shuffle-mode): a third `sampling_mode` on `Random Prompts Advanced` that visits every value once in a seeded-random order before repeating, plus the inline `{&a|b|c}` syntax to shuffle a single variant list in any mode or node.
 * [Wildcard search/filter syntax](#wildcard-searchfilter-syntax): `__name?filter__` keeps only the wildcard values matching a case-insensitive regex, with commas as OR.
-* [Saved prompts](#saved-prompts-random-prompts-advanced): `Random Prompts Advanced` can hold a list of prompts in one workflow, with an option to step to the next prompt after each run.
+* [Saved prompts](#saved-prompts-random-prompts-advanced): `Random Prompts Advanced` can hold a list of prompts in one workflow, with an option to step to the next prompt after each run. Prompts can be dragged into the order you want them run.
 * [Wildcard auto-reload](#wildcard-auto-reload): edits to wildcard files on disk are picked up on the next run without restarting ComfyUI.
 
 To install this fork instead of the original, clone it in place of the upstream repository in the [manual installation](#manual-installation) steps:
@@ -182,6 +182,7 @@ The prompt box is shown as a list:
 - Click a closed row to open it. The open prompt is the one used when you queue a run.
 - **+ New prompt** adds an empty prompt and opens it.
 - 🗑 deletes a prompt (with a confirmation unless it is empty). The last prompt can't be deleted.
+- ⠿ (next to 🗑) drags a prompt to a new position in the list. The open prompt stays open wherever it lands. Use this to set the order `go to next prompt` runs scenes in.
 
 Dynamic prompt syntax and wildcards work inside each prompt as usual.
 
