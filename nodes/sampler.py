@@ -121,6 +121,10 @@ def _preprocess_shuffle_syntax(text: str, rand: random_module.Random) -> str:
     return "".join(result)
 
 
+# Inline sampler prefixes that keep state between runs: {@..} {&..} {!..} __@x__ __&x__ __!x__
+_STATEFUL_SYNTAX = re.compile(r"\{\s*[@&!]|__[@&!]")
+
+
 class ShuffleSampler(CyclicalSampler):
     """Cycles through variant/wildcard values in a seeded-random shuffled order.
 
@@ -380,7 +384,12 @@ class DPAbstractSamplerNodeAdvanced(ABC):
         if text.strip() == "":
             return ("",)
 
-        if self.has_prompt_changed(text):
+        # A ${var=!...} value is picked once per generator, so reusing the generator
+        # across runs pins the variable. Random mode has no position to keep, so it
+        # gets a fresh generator each run unless an inline cycling/shuffle/combinatorial
+        # prefix needs the generator's state.
+        fresh = sampling_mode == "random" and not _STATEFUL_SYNTAX.search(text)
+        if fresh or self.has_prompt_changed(text):
             self._current_prompt = text
             processed = self._preprocess_prompt(text, sampling_mode)
             self._prompts = self.context(sampling_mode).sample_prompts(processed)
