@@ -294,6 +294,9 @@ function setupPromptList(node) {
     const widget = node.addDOMWidget("prompt_list", "dp_prompt_list", container, {
         serialize: false,
         hideOnZoom: false,
+        // The list is a single DOM element. If the right-hand properties panel shows it
+        // too, the panel moves it into its own (narrow) column and the node's copy shrinks.
+        hideInPanel: true,
         getMinHeight: () => 220,
     });
     widget.serialize = false;
