@@ -2,6 +2,8 @@
 
 Changes on top of [cbaoth/comfyui-dynamicprompts](https://github.com/cbaoth/comfyui-dynamicprompts) (based on 0.2.1). The version number has not been changed. Details are in the README under [Changes in this fork](../README.md#changes-in-this-fork-perryclarke).
 
+- 2026-11-15 - Variables: `${name=!...}` gets a new value on every run in `shuffle` mode, and in `random` mode when the prompt also uses `@`, `&` or `!` prefixes. Before, the first value stayed fixed until the prompt text changed. The value follows the active sampling method (`${n=!{1|2|3|4}}` visits 1-4 once per cycle in shuffle mode) and every `${name}` in one prompt gets the same value. Tests in `tests/` (run `python -m unittest discover -s tests` with ComfyUI's Python).
+- 2026-11-13 - Variables: `${name=!...}` gets a new value on every run in `random` mode instead of staying fixed until the prompt text changed.
 - 2026-11-12 - Saved prompts: drag the ⠿ handle next to 🗑 to reorder prompts, so `go to next prompt` runs them in a chosen order. The open prompt stays open after a move.
 - 2026-11-11 - Saved prompts: **After each run** setting. `go to next prompt` opens the next non-empty prompt after each queued run, wrapping at the end; batch count steps through the list. Default `stay on this prompt` keeps the old behaviour.
 - 2026-11-10 - Saved prompts: `Random Prompts Advanced` holds a list of prompts stored with the workflow (`dp_prompts` node property). The open prompt is used for the run and is mirrored into the `text` input, so the API format and older copies of the extension still see a single prompt. New browser extension `web/prompt_list.js` (`WEB_DIRECTORY` added to `__init__.py`).

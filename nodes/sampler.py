@@ -12,7 +12,14 @@ from itertools import cycle as itertools_cycle
 from pathlib import Path
 from typing import cast
 
-from dynamicprompts.commands import VariantCommand, WildcardCommand
+from dynamicprompts.commands import (
+    Command,
+    LiteralCommand,
+    SequenceCommand,
+    VariantCommand,
+    WildcardCommand,
+)
+from dynamicprompts.commands.variable_commands import VariableAssignmentCommand
 from dynamicprompts.enums import SamplingMethod
 from dynamicprompts.samplers import CombinatorialSampler, RandomSampler
 from dynamicprompts.samplers.cycle import CyclicalSampler, _get_combination_samples
@@ -20,7 +27,7 @@ from dynamicprompts.samplers.utils import get_wildcard_not_found_fallback, wildc
 from dynamicprompts.sampling_context import SamplingContext
 from dynamicprompts.sampling_result import SamplingResult
 from dynamicprompts.types import ResultGen, to_result_gen
-from dynamicprompts.utils import next_sampler_next_value
+from dynamicprompts.utils import next_sampler_next_value, rotate_and_join
 from dynamicprompts.wildcards import WildcardManager
 from dynamicprompts.wildcards.values import WildcardValues
 
@@ -125,7 +132,74 @@ def _preprocess_shuffle_syntax(text: str, rand: random_module.Random) -> str:
 _STATEFUL_SYNTAX = re.compile(r"\{\s*[@&!]|__[@&!]")
 
 
-class ShuffleSampler(CyclicalSampler):
+class _LiveLiteralCommand(LiteralCommand):
+    """A literal whose text the enclosing sequence replaces before each prompt.
+
+    Samplers read ``command.literal`` every time they yield, so every access to
+    a variable bound to this command sees the current value.
+    """
+
+    def __init__(self) -> None:
+        object.__setattr__(self, "sampling_method", None)
+        object.__setattr__(self, "_text", "")
+
+    @property
+    def literal(self) -> str:  # type: ignore[override]
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        object.__setattr__(self, "_text", text)
+
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
+
+class _PerPromptVariablesMixin:
+    """Re-pick ``${name=!...}`` values for every prompt a sequence yields.
+
+    The library evaluates immediate assignments once, when the sequence's
+    generator is built. The node keeps that generator across runs whenever it
+    has to remember cycling/shuffle positions, which pinned the variable to its
+    first value. Here each immediate value gets its own generator, advanced once
+    per prompt, so the variable follows the active sampling method across runs
+    while every access within one prompt still sees the same value.
+    """
+
+    def _get_sequence(self, command: SequenceCommand, context: SamplingContext) -> ResultGen:
+        live: list[tuple[_LiveLiteralCommand, ResultGen]] = []
+        variables: dict[str, Command] = {}
+        tokens: list[Command] = []
+        for token in command.tokens:
+            if not isinstance(token, VariableAssignmentCommand):
+                tokens.append(token)
+            elif (
+                token.immediate
+                and not isinstance(token.value, LiteralCommand)
+                and (token.overwrite or token.name not in context.variables)
+            ):
+                holder = _LiveLiteralCommand()
+                live.append((holder, context.generator_from_command(token.value)))
+                variables[token.name] = holder
+            else:
+                variables[token.name] = context.process_variable_assignment(token)
+        context = context.with_variables(variables)
+        sub_generators = [context.generator_from_command(c) for c in tokens]
+
+        while True:
+            for holder, values in live:
+                holder.set_text(str(next(values)))
+            yield rotate_and_join(sub_generators, separator=command.separator)
+
+
+class _PerPromptRandomSampler(_PerPromptVariablesMixin, RandomSampler):
+    pass
+
+
+class _PerPromptCyclicalSampler(_PerPromptVariablesMixin, CyclicalSampler):
+    pass
+
+
+class ShuffleSampler(_PerPromptVariablesMixin, CyclicalSampler):
     """Cycles through variant/wildcard values in a seeded-random shuffled order.
 
     The shuffle permutation is determined once when the generator is first
@@ -350,6 +424,11 @@ class DPAbstractSamplerNodeAdvanced(ABC):
             return SamplingContext(
                 wildcard_manager=self._wildcard_manager,
                 default_sampling_method=SamplingMethod.RANDOM,
+                samplers={
+                    SamplingMethod.RANDOM: _PerPromptRandomSampler(),
+                    SamplingMethod.COMBINATORIAL: CombinatorialSampler(),
+                    SamplingMethod.CYCLICAL: _PerPromptCyclicalSampler(),
+                },
             )
         elif sampling_mode == "combinatorial":
             return SamplingContext(
@@ -361,7 +440,7 @@ class DPAbstractSamplerNodeAdvanced(ABC):
                 wildcard_manager=self._wildcard_manager,
                 default_sampling_method=SamplingMethod.CYCLICAL,
                 samplers={
-                    SamplingMethod.RANDOM: RandomSampler(),
+                    SamplingMethod.RANDOM: _PerPromptRandomSampler(),
                     SamplingMethod.COMBINATORIAL: CombinatorialSampler(),
                     SamplingMethod.CYCLICAL: ShuffleSampler(),
                 },

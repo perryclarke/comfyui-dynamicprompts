@@ -107,6 +107,7 @@ Shuffle mode (`sampling_mode = shuffle`) provides a middle ground between `rando
 - The visiting order is a random permutation determined by the **seed**: the same seed always produces the same order. A seed of `0` does not reseed the random generator, so the order is not reproducible with seed `0`.
 - Once all values have been used, the same permuted order repeats from the beginning.
 - Wildcard files reloaded from disk (due to on-disk changes) will start a fresh shuffle.
+- Immediate variables get a new value on every run, following the shuffle order: with `${n=!{1|2|3|4}}`, four runs use 1, 2, 3 and 4 once each, and every `${n}` in a prompt gets the same value.
 
 #### Inline syntax: `{&opt1|opt2|opt3}`
 
